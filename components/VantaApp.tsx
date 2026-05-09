@@ -15,7 +15,7 @@ import { useGestures } from "@/hooks/useGestures";
 import { ClayObject } from "./canvas/ClayObject";
 import { landmarkToWorld } from "@/lib/utils/coordinates";
 import { ShareButton } from "./ui/ShareButton";
-import { downloadImage, shareImage } from "@/lib/utils/snapshot";
+import { captureCanvas, downloadImage, shareImage } from "@/lib/utils/snapshot";
 
 export const VantaApp: React.FC = () => {
   const [permissionState, setPermissionState] = useState<"requesting" | "granted" | "denied" | "tracking">("requesting");
@@ -67,8 +67,7 @@ export const VantaApp: React.FC = () => {
   const onShare = useCallback(async () => {
     if (!threeRef.current) return;
     const { renderer, scene, camera } = threeRef.current;
-    renderer.render(scene, camera);
-    const dataUrl = renderer.domElement.toDataURL("image/png");
+    const dataUrl = await captureCanvas(renderer, scene, camera);
     
     // Create watermark canvas
     const img = new Image();

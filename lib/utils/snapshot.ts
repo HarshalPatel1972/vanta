@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 
-export const captureCanvas = async (renderer: THREE.WebGLRenderer): Promise<string> => {
+export const captureCanvas = async (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): Promise<string> => {
   // Ensure the frame is captured after rendering
-  renderer.render(renderer.scene, renderer.camera);
+  renderer.render(scene, camera);
   return renderer.domElement.toDataURL('image/png');
 };
 
