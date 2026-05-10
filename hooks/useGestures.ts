@@ -1,12 +1,12 @@
 "use client";
 
-import { useRef, useMemo, useCallback } from "react";
-import { Point, getDistance } from "../lib/utils/coordinates";
+import { useRef, useMemo } from "react";
+import { Point } from "../lib/utils/coordinates";
 import { isPinching } from "../lib/gestures/pinch";
 import { isGripping } from "../lib/gestures/grip";
 import { isPalmOpen } from "../lib/gestures/palm";
 
-export type GestureType = "NONE" | "PINCH" | "GRIP" | "PALM" | "PUNCH" | "THROW";
+export type GestureType = "NONE" | "PINCH" | "GRIP" | "PALM" | "PUNCH" | "SWIPE_RIGHT" | "SWIPE_UP" | "SWIPE_LEFT";
 
 export interface HandGesture {
   type: GestureType;
@@ -40,11 +40,23 @@ export const useGestures = (trackingResults: any) => {
 
       // Detect raw gesture
       let rawType: GestureType = "NONE";
-      if (isPinching(landmarks)) rawType = "PINCH";
-      else if (isGripping(landmarks)) {
+      
+      if (isPinching(landmarks)) {
+        rawType = "PINCH";
+      } else if (isGripping(landmarks)) {
         rawType = "GRIP";
-        if (velocity.z < -0.04) rawType = "PUNCH";
-      } else if (isPalmOpen(landmarks)) rawType = "PALM";
+        if (Math.abs(velocity.z) > 0.04) rawType = "PUNCH";
+      } else if (isPalmOpen(landmarks)) {
+        rawType = "PALM";
+      }
+
+      // Detect Swipes
+      if (Math.abs(velocity.x) > 0.06 && Math.abs(velocity.y) < 0.03) {
+        if (velocity.x > 0.06) rawType = "SWIPE_RIGHT";
+        else rawType = "SWIPE_LEFT";
+      } else if (velocity.y < -0.06 && Math.abs(velocity.x) < 0.03) {
+        rawType = "SWIPE_UP";
+      }
 
       // Debounce logic
       if (!gestureStates.current[index]) {
@@ -59,7 +71,10 @@ export const useGestures = (trackingResults: any) => {
         state.lastRawType = rawType;
       }
 
-      if (state.count >= 3 && state.type !== rawType) {
+      // Swipes don't need much debouncing (they are momentary)
+      if (rawType.startsWith("SWIPE") || rawType === "PUNCH") {
+         state.type = rawType;
+      } else if (state.count >= 3 && state.type !== rawType) {
         state.type = rawType;
       }
 
