@@ -4,8 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { LoadScreen } from "./ui/LoadScreen";
 import { HandTracker } from "./tracking/HandTracker";
 import { LandmarkOverlay } from "./tracking/LandmarkOverlay";
-import { RoomBuilder, RoomDimensions } from "./room/RoomBuilder";
-import { RoomPhysics } from "./room/RoomPhysics";
+import { initDefaultRoom, DEFAULT_ROOM_DIMS } from "@/lib/physics/defaultRoom";
 import { ThreeScene, ThreeSceneHandle } from "./canvas/ThreeScene";
 import { PhysicsWorld } from "./canvas/PhysicsWorld";
 import { usePhysicsWorld } from "@/hooks/usePhysicsWorld";
@@ -23,8 +22,8 @@ export const VantaApp: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showLoadScreen, setShowLoadScreen] = useState(true);
   
-  const [roomConfirmed, setRoomConfirmed] = useState(false);
-  const [roomDims, setRoomDims] = useState<RoomDimensions>({ width: 5, height: 3, depth: 4 });
+  const roomDims = DEFAULT_ROOM_DIMS;
+  const roomInitialized = useRef(false);
   
   const threeRef = useRef<ThreeSceneHandle>(null);
   const { results, isTracking, handleResults, handleReady } = useHandTracking();
@@ -42,16 +41,18 @@ export const VantaApp: React.FC = () => {
     }
   }, [isTracking, permissionState]);
 
+  useEffect(() => {
+    if (world && RAPIER && threeRef.current && !roomInitialized.current) {
+      initDefaultRoom(world, RAPIER, threeRef.current.scene);
+      roomInitialized.current = true;
+    }
+  }, [world, RAPIER, physicsReady]);
+
   const onCameraReady = useCallback(() => {
     setPermissionState("granted");
     setStatus("Waiting for hand detection...");
     handleReady();
   }, [handleReady]);
-
-  const onRoomConfirm = useCallback((dims: RoomDimensions) => {
-    setRoomDims(dims);
-    setRoomConfirmed(true);
-  }, []);
 
   const onTear = useCallback((id: number, p1: THREE.Vector3, p2: THREE.Vector3, r: number) => {
     setObjects(prev => {
@@ -69,7 +70,6 @@ export const VantaApp: React.FC = () => {
     const { renderer, scene, camera } = threeRef.current;
     const dataUrl = await captureCanvas(renderer, scene, camera);
     
-    // Create watermark canvas
     const img = new Image();
     img.src = dataUrl;
     await new Promise(resolve => img.onload = resolve);
@@ -80,10 +80,8 @@ export const VantaApp: React.FC = () => {
     const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.drawImage(img, 0, 0);
-      
-      // Watermark
       ctx.font = "italic 40px 'Bebas Neue', sans-serif";
-      ctx.fillStyle = "rgba(245, 245, 240, 0.4)"; // --bone with opacity
+      ctx.fillStyle = "rgba(245, 245, 240, 0.4)";
       ctx.textAlign = "right";
       ctx.fillText("VANTA", canvas.width - 40, canvas.height - 40);
     }
@@ -96,7 +94,7 @@ export const VantaApp: React.FC = () => {
 
   // Drawing logic
   useEffect(() => {
-    if (!roomConfirmed || gestures.length === 0 || !results) return;
+    if (gestures.length === 0 || !results) return;
 
     const rightHandIndex = gestures.findIndex(g => !g.isLeft);
     const rightHand = gestures[rightHandIndex];
@@ -106,8 +104,6 @@ export const VantaApp: React.FC = () => {
       
       setDrawingPoints(prev => {
         const newPoints = [...prev, worldPos];
-        
-        // Check for closure within the state update
         if (newPoints.length > 20) {
           const start = newPoints[0];
           const dist = worldPos.distanceTo(start);
@@ -119,13 +115,12 @@ export const VantaApp: React.FC = () => {
             const center = new THREE.Vector3();
             box.getCenter(center);
             
-            // Note: setObjects is called asynchronously from here
             setTimeout(() => {
               setObjects(obs => [...obs, { id: nextId.current++, pos: center, radius: Math.max(radius, 0.1) }]);
               setDrawingPoints([]);
             }, 0);
             
-            return prev; // Return prev to avoid adding the closure point to drawingPoints before clearing
+            return prev;
           }
         }
         return newPoints;
@@ -133,7 +128,7 @@ export const VantaApp: React.FC = () => {
     } else {
       setDrawingPoints(prev => (prev.length > 0 ? [] : prev));
     }
-  }, [gestures, roomConfirmed, results, roomDims]);
+  }, [gestures, results, roomDims]);
 
   // Render drawing path
   useEffect(() => {
@@ -187,32 +182,24 @@ export const VantaApp: React.FC = () => {
   return (
     <main className="relative w-full h-screen overflow-hidden bg-[var(--void)]">
       <ThreeScene ref={threeRef} />
-      {roomConfirmed && (
-        <>
-          <PhysicsWorld world={world} />
-          <RoomPhysics world={world} RAPIER={RAPIER} dims={roomDims} scene={threeRef.current?.scene || null} />
-          {world && RAPIER && threeRef.current && objects.map(obj => (
-            <ClayObject 
-              key={obj.id} 
-              id={obj.id}
-              world={world} 
-              RAPIER={RAPIER} 
-              scene={threeRef.current!.scene} 
-              position={obj.pos} 
-              radius={obj.radius} 
-              gestures={gestures} 
-              roomDims={roomDims} 
-              handLandmarks={results?.multiHandLandmarks || []} 
-              onTear={onTear}
-            />
-          ))}
-        </>
-      )}
+      <PhysicsWorld world={world} />
+      {world && RAPIER && threeRef.current && objects.map(obj => (
+        <ClayObject 
+          key={obj.id} 
+          id={obj.id}
+          world={world} 
+          RAPIER={RAPIER} 
+          scene={threeRef.current!.scene} 
+          position={obj.pos} 
+          radius={obj.radius} 
+          gestures={gestures} 
+          roomDims={roomDims} 
+          handLandmarks={results?.multiHandLandmarks || []} 
+          onTear={onTear}
+        />
+      ))}
       <HandTracker onResults={handleResults} onReady={onCameraReady} />
       <LandmarkOverlay results={results} />
-      {permissionState === "tracking" && !roomConfirmed && (
-        <RoomBuilder gestures={gestures} scene={threeRef.current?.scene || null} onConfirm={onRoomConfirm} />
-      )}
       {showLoadScreen && (
         <div className={`transition-opacity duration-600 ${permissionState === "tracking" ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
           <LoadScreen status={status} />
@@ -227,7 +214,7 @@ export const VantaApp: React.FC = () => {
       )}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
         <span className="text-lg font-bebas text-[var(--fog)] opacity-60 tracking-[0.08em]">
-          {roomConfirmed ? "VOID MODE" : "SETTING UP SPACE"}
+          READY
         </span>
       </div>
       <ShareButton onClick={onShare} visible={objects.length > 0} />

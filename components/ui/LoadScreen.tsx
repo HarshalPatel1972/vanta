@@ -11,7 +11,7 @@ export const LoadScreen: React.FC<LoadScreenProps> = ({ status }) => {
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[var(--void)] text-[var(--bone)]">
       <div className="flex flex-col items-center space-y-6">
         {/* Wordmark */}
-        <h1 className="text-7xl font-normal tracking-[0.12em] text-[var(--bone)] font-bebas">
+        <h1 className="text-7xl font-normal tracking-[0.12em] text-[var(--bone)] font-bebas animate-pulse-slow">
           VANTA
         </h1>
 

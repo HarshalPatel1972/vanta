@@ -3,13 +3,13 @@
 @tailwind utilities;
 
 :root {
-  --void: #050507;
+  --void: #0A0A0F;
   --surface: #0D0D12;
   --border: #1A1A24;
   --muted: #2A2A38;
-  --fog: #4A4A6A;
-  --ghost: #7A7A9A;
-  --bone: #E8E8F0;
+  --fog: #C2C2D1;
+  --ghost: #4A4A5C;
+  --bone: #F5F5F0;
   --pure: #FFFFFF;
 
   --clay: #C17A4A;
